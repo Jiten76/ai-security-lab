@@ -1,0 +1,33 @@
+# build → break → govern, as three moving parts.
+#
+#   docker compose up --build
+#   open http://localhost:8899   (the governor's live dashboard)
+#
+# The governor is Yukti's dashboard; the attacker runs the crews and streams
+# their traces to it. Watch the attacks get caught in real time.
+
+services:
+  governor:
+    build: .
+    command: uvicorn ailab.governor:app --host 0.0.0.0 --port 8899
+    environment:
+      YUKTI_MODE: dataflow
+    # Bind the published port to loopback only: the serve API is an
+    # unauthenticated local demo, not a network-exposed deployment.
+    ports:
+      - "127.0.0.1:8899:8899"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8899/api/meta')"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+
+  attacker:
+    build: .
+    depends_on:
+      governor:
+        condition: service_healthy
+    command: python -m ailab.stream http://governor:8899
+    environment:
+      AILAB_PACE: "1.0"
